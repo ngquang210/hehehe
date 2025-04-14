@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đoán Cờ Các Nước - Multiplayer (No Name Input)</title>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+    <!-- CSS nhúng -->
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f0f0;
+            text-align: center;
+            padding: 20px;
+            box-sizing: border-box;
+            margin: 0;
+        }
+
+        /* Shared styles for screens */
+        #password-screen, #waiting-screen, #game-screen, #end-screen {
+            background-color: white;
+            padding: 25px 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            width: 90%;
+            max-width: 550px;
+            display: none; /* Hide all by default */
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Show the first screen */
+        #password-screen {
+            display: flex;
+        }
+
+        h1, h2 {
+            color: #333;
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+        h2 {
+            font-size: 1.3em;
+        }
+
+        input[type="password"], input[type="text"] /* Keep text for potential future use */ {
+            padding: 12px 15px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            width: calc(100% - 32px);
+            font-size: 1em;
+            box-sizing: border-box;
+        }
+
+        button {
+            padding: 12px 25px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease, transform 0.1s ease;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        button:active { transform: scale(0.98); }
+
+        #password-submit, #play-again-button {
+            width: auto;
+            display: inline-block;
+            min-width: 120px;
+        }
+
+        .error-message {
+            color: red;
+            font-size: 14px;
+            margin-top: 10px;
+            min-height: 18px;
+        }
+
+        #waiting-screen p {
+            font-size: 1.1em; /* Slightly larger */
+            color: #333; /* Darker text */
+            margin-top: 15px; /* More spacing */
+        }
+         #waiting-screen h1 {
+             font-size: 1.6em; /* Larger title */
+             margin-bottom: 30px;
+         }
+        #waiting-screen span {
+            font-weight: bold;
+            color: #17a2b8; /* Teal color */
+            padding: 3px 6px;
+            background-color: #eef;
+            border-radius: 3px;
+        }
+        #opponent-waiting-name {
+             font-style: italic;
+             color: #888; /* Gray when waiting */
+             background-color: transparent;
+             padding: 0;
+        }
+        #opponent-waiting-name.connected {
+            font-style: normal;
+            color: #dc3545; /* Red for opponent */
+            background-color: #fee;
+             padding: 3px 6px;
+        }
+
+
+        #player-info {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            margin-bottom: 20px;
+            font-weight: bold;
+            font-size: 1.1em;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 15px;
+        }
+        #player-info p span:first-child { /* Player name spans */
+             padding: 3px 6px;
+             border-radius: 3px;
+             color: white; /* White text for names */
+        }
+         #player1-name { background-color: #17a2b8; } /* Teal for P1 */
+         #player2-name { background-color: #dc3545; } /* Red for P2 */
+
+        #player-info span[id$="-score"] { /* Score spans */
+             color: #28a745;
+             margin-left: 8px; /* More space before score */
+             font-size: 1.1em; /* Larger score */
+        }
+
+
+        #question-counter {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 15px;
+        }
+        #question-container {
+            margin-bottom: 25px;
+            width: 100%;
+        }
+
+        #flag-image {
+            max-width: 180px;
+            height: auto;
+            border: 1px solid #ddd;
+            display: block;
+            margin: 0 auto 20px auto;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        #options-container {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+            width: 100%;
+        }
+
+        .option {
+            width: 100%;
+            min-height: 55px;
+            font-size: 1em;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            color: #333;
+            transition: background-color 0.2s, border-color 0.2s; /* Smooth transition */
+        }
+        .option:hover:not(:disabled) { /* Add :not(:disabled) */
+             background-color: #e9ecef;
+             border-color: #adb5bd;
+        }
+
+        #feedback {
+            margin-top: 15px;
+            font-weight: bold;
+            min-height: 25px;
+            font-size: 1.1em;
+            transition: color 0.3s; /* Smooth color change */
+        }
+
+        .correct {
+            background-color: #28a745 !important;
+            color: white !important;
+            border-color: #28a745 !important;
+        }
+        .incorrect {
+            background-color: #dc3545 !important;
+            color: white !important;
+            border-color: #dc3545 !important;
+        }
+        .reveal-correct {
+            background-color: #17a2b8 !important; /* Use teal for reveal */
+            color: white !important;
+            border-color: #17a2b8 !important;
+        }
+        .disabled {
+            opacity: 0.65; /* Slightly more opaque */
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        #end-screen h1 { color: #007bff; margin-bottom: 15px; }
+        #final-result { font-size: 1.2em; margin-bottom: 20px; line-height: 1.5; }
+        #winner-message { color: #28a745; font-weight: bold; font-size: 1.4em; margin-bottom: 10px; }
+        #loser-message { color: #6c757d; font-style: italic; font-size: 1.1em; margin-bottom: 25px; }
+
+         @media (max-width: 600px) {
+             #password-screen, #waiting-screen, #game-screen, #end-screen { padding: 20px; }
+             h1 { font-size: 1.6em; }
+             #flag-image { max-width: 120px; }
+             .option { min-height: 50px; font-size: 0.95em; }
+             #options-container { gap: 10px; }
+         }
+    </style>
+</head>
+<body>
+
+    <!-- 1. Màn hình Mật khẩu -->
+    <div id="password-screen">
+        <h1>Game Đoán Cờ</h1>
+        <input type="password" id="password-input" placeholder="Nhập mật khẩu...">
+        <button id="password-submit">Vào Game</button>
+        <p id="password-error" class="error-message"></p>
+    </div>
+
+    <!-- 2. Màn hình Chờ (Không còn màn hình nhập tên) -->
+    <div id="waiting-screen">
+        <h1>Đang chờ đối thủ...</h1>
+        <p>Bạn là: <span id="my-waiting-name"></span></p>
+        <p>Đối thủ: <span id="opponent-waiting-name">Chưa kết nối</span></p>
+        <p style="margin-top: 25px; font-size: 0.95em; color: #777;">
+            Game sẽ tự động bắt đầu khi có đủ 2 người chơi.
+        </p>
+    </div>
+
+    <!-- 3. Màn hình Game -->
+    <div id="game-screen">
+        <div id="player-info">
+            <p><span id="player1-name">Player 1</span>: <span id="player1-score">0</span></p>
+            <p><span id="player2-name">Player 2</span>: <span id="player2-score">0</span></p>
+        </div>
+        <p id="question-counter">Câu ?/?</p>
+        <div id="question-container">
+            <img id="flag-image" src="" alt="Quốc kỳ">
+            <h2 id="question-text">Đây là cờ của nước nào?</h2>
+        </div>
+        <div id="options-container">
+            <button class="option"></button>
+            <button class="option"></button>
+            <button class="option"></button>
+            <button class="option"></button>
+        </div>
+        <p id="feedback"></p>
+    </div>
+
+    <!-- 4. Màn hình Kết thúc -->
+    <div id="end-screen">
+        <h1>Kết Thúc Game!</h1>
+        <p id="final-result"></p>
+        <p id="winner-message"></p>
+        <p id="loser-message"></p>
+        <button id="play-again-button">Chơi Lại?</button>
+    </div>
+
+    <!-- Optional: Âm thanh -->
+    <!-- <audio id="applause-sound" src="assets/applause.mp3" preload="auto"></audio> -->
+
+    <!-- JavaScript nhúng -->
+    <script>
+        // --- CẤU HÌNH FIREBASE ---
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            databaseURL: "YOUR_DATABASE_URL",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+        let app;
+        try {
+             if (!firebase.apps.length) {
+                 app = firebase.initializeApp(firebaseConfig);
+             } else {
+                 app = firebase.app();
+             }
+        } catch (e) {
+             console.error("Lỗi khởi tạo Firebase:", e);
+             alert("Không thể kết nối đến server game. Vui lòng kiểm tra cấu hình Firebase.");
+        }
+        const database = firebase.database();
+
+        // --- DỮ LIỆU GAME ---
+        const countries = [
+            { name: "Việt Nam", code: "vn" }, { name: "Hoa Kỳ", code: "us" },
+            { name: "Nhật Bản", code: "jp" }, { name: "Hàn Quốc", code: "kr" },
+            { name: "Trung Quốc", code: "cn" }, { name: "Thái Lan", code: "th" },
+            { name: "Pháp", code: "fr" }, { name: "Đức", code: "de" },
+            { name: "Vương quốc Anh", code: "gb" }, { name: "Canada", code: "ca" },
+            { name: "Úc", code: "au" }, { name: "Brazil", code: "br" },
+            { name: "Argentina", code: "ar" }, { name: "Ý", code: "it" },
+            { name: "Tây Ban Nha", code: "es" }, { name: "Nga", code: "ru" },
+            { name: "Ấn Độ", code: "in" }, { name: "Ai Cập", code: "eg" },
+            { name: "Nam Phi", code: "za" }, { name: "Mexico", code: "mx" }
+        ];
+
+        const CORRECT_PASSWORD = "gamelo";
+        const GAME_ID = "flagQuizGameMultiplayerNoName"; // ID mới để tránh xung đột
+        const POINTS_PER_CORRECT_ANSWER = 10;
+        const DELAY_NEXT_QUESTION = 2000; // 2 giây
+        const TOTAL_QUESTIONS = countries.length;
+        const PLAYER1_DEFAULT_NAME = "Player 1";
+        const PLAYER2_DEFAULT_NAME = "Player 2";
+
+        // --- BIẾN TRẠNG THÁI GAME ---
+        let currentPlayerId = null;
+        let opponentPlayerId = null;
+        let myName = ""; // Sẽ là "Player 1" hoặc "Player 2"
+        let opponentName = ""; // Sẽ là tên mặc định của đối thủ
+        let currentQuestionIndex = 0;
+        let player1Score = 0;
+        let player2Score = 0;
+        let questionsOrder = [];
+        let gameRef = null;
+        let playerRef = null;
+        let opponentRef = null;
+        let gameListener = null;
+        let opponentListener = null;
+        let nextQuestionTimeout = null;
+        let opponentConnected = false; // Theo dõi trạng thái kết nối của đối thủ
+
+        // --- LẤY DOM ELEMENTS ---
+        const passwordScreen = document.getElementById('password-screen');
+        const passwordInput = document.getElementById('password-input');
+        const passwordSubmit = document.getElementById('password-submit');
+        const passwordError = document.getElementById('password-error');
+
+        const waitingScreen = document.getElementById('waiting-screen');
+        const myWaitingName = document.getElementById('my-waiting-name');
+        const opponentWaitingName = document.getElementById('opponent-waiting-name');
+
+        const gameScreen = document.getElementById('game-screen');
+        const player1NameDisplay = document.getElementById('player1-name');
+        const player1ScoreDisplay = document.getElementById('player1-score');
+        const player2NameDisplay = document.getElementById('player2-name');
+        const player2ScoreDisplay = document.getElementById('player2-score');
+        const questionCounter = document.getElementById('question-counter');
+        const flagImage = document.getElementById('flag-image');
+        const optionsContainer = document.getElementById('options-container');
+        const feedbackDisplay = document.getElementById('feedback');
+
+        const endScreen = document.getElementById('end-screen');
+        const finalResultDisplay = document.getElementById('final-result');
+        const winnerMessageDisplay = document.getElementById('winner-message');
+        const loserMessageDisplay = document.getElementById('loser-message');
+        const playAgainButton = document.getElementById('play-again-button');
+
+        // --- HÀM HỖ TRỢ ---
+        function shuffleArray(array) { /* ... (giữ nguyên) ... */
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+         }
+        function showScreen(screenId) { /* ... (giữ nguyên) ... */
+             const screens = document.querySelectorAll('body > div');
+             screens.forEach(screen => {
+                 screen.style.display = 'none';
+             });
+             const screenToShow = document.getElementById(screenId);
+             if (screenToShow) {
+                 screenToShow.style.display = 'flex';
+             } else {
+                 console.error("Screen ID not found:", screenId);
+             }
+        }
+        function disableOptions() { /* ... (giữ nguyên) ... */
+             const optionButtons = optionsContainer.querySelectorAll('.option');
+             optionButtons.forEach(button => {
+                 button.disabled = true;
+                 button.classList.add('disabled');
+             });
+        }
+        function enableOptions() { /* ... (giữ nguyên, đảm bảo xóa listener cũ) ... */
+             clearTimeout(nextQuestionTimeout);
+             const optionButtons = optionsContainer.querySelectorAll('.option');
+             optionButtons.forEach(button => {
+                 button.disabled = false;
+                 button.classList.remove('disabled', 'correct', 'incorrect', 'reveal-correct');
+                 button.style.backgroundColor = '';
+                 button.style.borderColor = '';
+                 button.style.color = '';
+                 button.removeEventListener('click', handleAnswer);
+                 button.addEventListener('click', handleAnswer);
+             });
+        }
+        function updateScoreDisplay() { /* ... (giữ nguyên) ... */
+             player1ScoreDisplay.textContent = player1Score;
+             player2ScoreDisplay.textContent = player2Score;
+        }
+        function updateNameDisplay() {
+             // Cập nhật tên trên màn hình game dùng tên mặc định
+             player1NameDisplay.textContent = PLAYER1_DEFAULT_NAME;
+             player2NameDisplay.textContent = PLAYER2_DEFAULT_NAME;
+             // Cập nhật điểm đi kèm (đã được cập nhật riêng)
+             updateScoreDisplay();
+        }
+
+        // --- LOGIC XỬ LÝ MẬT KHẨU ---
+        passwordSubmit.addEventListener('click', () => {
+            const enteredPassword = passwordInput.value;
+            if (enteredPassword === CORRECT_PASSWORD) {
+                 passwordError.textContent = '';
+                 passwordSubmit.disabled = true; // Vô hiệu hóa nút khi đang xử lý
+                 passwordSubmit.textContent = "Đang vào...";
+                 initializeGameConnection(); // Bắt đầu kết nối và xác định player
+            } else {
+                 passwordError.textContent = 'Mật khẩu sai!';
+                 passwordInput.focus();
+                 passwordSubmit.disabled = false;
+                 passwordSubmit.textContent = "Vào Game";
+            }
+        });
+        passwordInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') passwordSubmit.click();
+        });
+
+        // --- KẾT NỐI FIREBASE VÀ XÁC ĐỊNH PLAYER ID ---
+        function initializeGameConnection() {
+            if (!database) {
+                 console.error("Database chưa sẵn sàng!");
+                 passwordError.textContent = 'Lỗi kết nối server game.';
+                 passwordSubmit.disabled = false; // Cho phép thử lại
+                 passwordSubmit.textContent = "Vào Game";
+                 return;
+            }
+            gameRef = database.ref(`games/${GAME_ID}`);
+
+            gameRef.child('players').transaction(currentPlayers => {
+                 if (currentPlayers === null) currentPlayers = {};
+
+                 // Xác định vai trò và đặt thông tin cơ bản
+                 if (!currentPlayers.player1 || !currentPlayers.player1.connected) {
+                     currentPlayerId = 'player1';
+                     opponentPlayerId = 'player2';
+                     currentPlayers.player1 = { name: PLAYER1_DEFAULT_NAME, score: 0, connected: true };
+                     // Chỉ P1 reset game state nếu P2 không có hoặc không connected
+                     if (!currentPlayers.player2 || !currentPlayers.player2.connected) {
+                         console.log("Player 1 resetting game state.");
+                         // Không reset ở đây, để gameListener xử lý khi status là waiting
+                         // Reset điểm P2 nếu P2 tồn tại nhưng không connected
+                          if(currentPlayers.player2) currentPlayers.player2.score = 0;
+                     }
+                 } else if (!currentPlayers.player2 || !currentPlayers.player2.connected) {
+                     currentPlayerId = 'player2';
+                     opponentPlayerId = 'player1';
+                     currentPlayers.player2 = { name: PLAYER2_DEFAULT_NAME, score: 0, connected: true };
+                      // Reset điểm P1 về 0 nếu P2 mới vào (đảm bảo game mới)
+                      if (currentPlayers.player1) currentPlayers.player1.score = 0;
+                 } else {
+                     currentPlayerId = null; // Game đầy
+                 }
+                 return currentPlayers;
+
+             }, (error, committed, snapshot) => {
+                 passwordSubmit.disabled = false; // Kích hoạt lại nút PW sau transaction
+                  passwordSubmit.textContent = "Vào Game";
+
+                 if (error) {
+                     console.error("Transaction thất bại:", error);
+                     passwordError.textContent = "Lỗi khi tham gia game. Thử lại.";
+                 } else if (!committed) {
+                     console.log("Transaction không được thực hiện.");
+                     passwordError.textContent = "Có lỗi xảy ra khi tham gia. Thử lại.";
+                 } else {
+                     // Transaction thành công
+                     if (currentPlayerId) {
+                         console.log(`Assigned as ${currentPlayerId}`);
+                         myName = (currentPlayerId === 'player1') ? PLAYER1_DEFAULT_NAME : PLAYER2_DEFAULT_NAME;
+                         playerRef = gameRef.child(`players/${currentPlayerId}`);
+                         opponentRef = gameRef.child(`players/${opponentPlayerId}`);
+
+                         // Thiết lập onDisconnect để xóa trạng thái connected
+                         playerRef.child('connected').onDisconnect().remove();
+                         // Không cần xóa tên vì tên là mặc định
+
+                         myWaitingName.textContent = myName; // Hiển thị tên mình trên màn chờ
+                         opponentWaitingName.textContent = "Chưa kết nối"; // Reset trạng thái đối thủ chờ
+                          opponentWaitingName.classList.remove('connected');
+                          opponentConnected = false;
+
+                         showScreen('waiting-screen');
+                         setupListeners(); // Thiết lập listener để theo dõi đối thủ và game
+
+                         // Reset game nếu là Player 1 và game chưa ở trạng thái waiting
+                          if (currentPlayerId === 'player1') {
+                              gameRef.child('status').once('value', statusSnap => {
+                                  const currentStatus = statusSnap.val();
+                                  // Nếu game đang playing hoặc finished, P1 reset về waiting
+                                  if (currentStatus === 'playing' || currentStatus === 'finished') {
+                                      console.log("Player 1 found ongoing game, resetting to waiting.");
+                                      resetGameOnFirebase();
+                                  } else if (!currentStatus) {
+                                       // Nếu chưa có status, P1 đặt là waiting
+                                        console.log("Player 1 setting initial status to waiting.");
+                                        gameRef.update({ status: 'waiting', currentQuestionIndex: 0, questionsOrder: null });
+                                  }
+                              });
+                          }
+                          // Kiểm tra ngay nếu đối thủ đã ở đó từ trước
+                          opponentRef.once('value', snap => {
+                               if(snap.exists() && snap.val().connected) {
+                                   opponentName = snap.val().name || (opponentPlayerId === 'player1' ? PLAYER1_DEFAULT_NAME : PLAYER2_DEFAULT_NAME);
+                                   opponentWaitingName.textContent = opponentName;
+                                   opponentWaitingName.classList.add('connected');
+                                   opponentConnected = true;
+                                   checkIfBothPlayersReady(); // Kiểm tra nếu đối thủ đã sẵn sàng
+                               }
+                           });
+
+
+                     } else {
+                         // Game đã đầy
+                         passwordError.textContent = "Game đã đủ 2 người chơi. Vui lòng thử lại sau.";
+                     }
+                 }
+             });
+        }
+
+
+        // --- LISTENERS ---
+        function setupListeners() {
+            setupOpponentListener();
+            setupGameListener();
+        }
+
+        function setupOpponentListener() {
+            if (opponentListener) opponentRef.off('value', opponentListener);
+
+            opponentListener = opponentRef.on('value', snapshot => {
+                const opponentData = snapshot.val();
+
+                if (opponentData && opponentData.connected) {
+                    opponentName = opponentData.name || (opponentPlayerId === 'player1' ? PLAYER1_DEFAULT_NAME : PLAYER2_DEFAULT_NAME); // Lấy tên mặc định nếu thiếu
+                    const opponentScore = opponentData.score || 0;
+                    opponentConnected = true; // Đánh dấu đối thủ đã kết nối
+
+                    console.log("Opponent connected:", opponentName);
+                    opponentWaitingName.textContent = opponentName;
+                    opponentWaitingName.classList.add('connected'); // Thêm class để đổi style
+
+                    // Cập nhật điểm đối thủ trên màn hình game nếu đang chơi
+                    if (gameScreen.style.display === 'flex') {
+                        if (opponentPlayerId === 'player1') player1Score = opponentScore;
+                        else player2Score = opponentScore;
+                        updateNameDisplay(); // Cập nhật cả tên và điểm
+                    }
+                    checkIfBothPlayersReady(); // Kiểm tra khi đối thủ kết nối/cập nhật
+
+                } else {
+                    // Đối thủ chưa kết nối hoặc đã ngắt kết nối
+                    opponentConnected = false; // Đánh dấu đối thủ chưa kết nối
+                    if (opponentName) { // Chỉ log nếu trước đó đã có tên (tức là họ vừa disconnect)
+                         console.log("Opponent disconnected:", opponentName);
+                    }
+                    opponentName = ""; // Xóa tên đối thủ cục bộ
+                    opponentWaitingName.textContent = "Chưa kết nối";
+                    opponentWaitingName.classList.remove('connected'); // Xóa class style
+
+                    // Xử lý khi đối thủ thoát giữa game
+                    if (gameScreen.style.display === 'flex' || endScreen.style.display === 'flex') {
+                         if (opponentConnected === false && playerRef) { // Kiểm tra xem mình còn trong game không
+                             alert(`${opponentPlayerId === 'player1' ? PLAYER1_DEFAULT_NAME : PLAYER2_DEFAULT_NAME} đã thoát khỏi game!`);
+                              // Player 1 có thể reset game về waiting
+                             if (currentPlayerId === 'player1') {
+                                 resetGameOnFirebase();
+                             } else {
+                                 // Player 2 chỉ quay về màn chờ (listener sẽ xử lý khi status đổi về waiting)
+                                 console.log("Player 2 waiting for game reset after opponent left.");
+                                  // Có thể hiện thông báo tạm thời
+                                 if(gameScreen.style.display === 'flex') feedbackDisplay.textContent = "Đối thủ đã thoát...";
+                             }
+                         }
+                         // Reset điểm đối thủ trên UI về 0
+                         if (opponentPlayerId === 'player1') player1Score = 0;
+                         else player2Score = 0;
+                         updateNameDisplay(); // Cập nhật UI
+                    }
+                }
+            }, error => {
+                console.error("Lỗi lắng nghe đối thủ:", error);
+            });
+        }
+
+        function setupGameListener() {
+             if (gameListener) gameRef.off('value', gameListener);
+
+             gameListener = gameRef.on('value', snapshot => {
+                 const gameData = snapshot.val();
+                 if (!gameData || !gameData.status) { // Kiểm tra có status không
+                     console.log("Game data không hợp lệ hoặc đã bị xóa.");
+                     // Nếu đang không ở màn hình pass, báo lỗi và reset
+                     if(passwordScreen.style.display === 'none') {
+                         alert("Game đã kết thúc hoặc có lỗi. Đang quay lại màn hình chính.");
+                         resetLocalGame(false);
+                     }
+                     return;
+                 }
+
+                 console.log("Game data update:", gameData);
+                 const newStatus = gameData.status;
+                 const newIndex = gameData.currentQuestionIndex;
+
+                 // Đồng bộ điểm số (luôn luôn làm)
+                 if (gameData.players) {
+                     player1Score = gameData.players.player1?.score || 0; // Dùng optional chaining
+                     player2Score = gameData.players.player2?.score || 0;
+                     // Cập nhật UI nếu đang trong game hoặc màn hình cuối
+                      if (gameScreen.style.display === 'flex' || endScreen.style.display === 'flex') {
+                         updateNameDisplay();
+                      }
+                 }
+
+                 // Xử lý chuyển màn hình và trạng thái
+                 switch (newStatus) {
+                     case 'playing':
+                         if (gameScreen.style.display !== 'flex') {
+                             console.log("Status 'playing'. Starting/resuming game.");
+                             if (gameData.questionsOrder) {
+                                 questionsOrder = gameData.questionsOrder;
+                                 currentQuestionIndex = newIndex !== undefined ? newIndex : 0;
+                                 startGameLocally(); // Hiển thị màn hình game và câu hỏi
+                             } else {
+                                 // Nên có questionsOrder nếu status là playing
+                                 console.error("Status is playing but questionsOrder is missing!");
+                                 if(currentPlayerId === 'player1') { // P1 thử tạo lại
+                                      questionsOrder = shuffleArray([...Array(countries.length).keys()]);
+                                      gameRef.update({ questionsOrder: questionsOrder, currentQuestionIndex: 0 });
+                                 } else {
+                                     // P2 chờ
+                                     feedbackDisplay.textContent = "Đang chờ dữ liệu game...";
+                                 }
+                             }
+                         } else {
+                             // Đã ở màn hình game, kiểm tra index thay đổi
+                             if (newIndex !== undefined && newIndex !== currentQuestionIndex) {
+                                 console.log(`Index changed to ${newIndex}`);
+                                 currentQuestionIndex = newIndex;
+                                 if (currentQuestionIndex < TOTAL_QUESTIONS) {
+                                     displayQuestion();
+                                 } else {
+                                     // Index vượt ngưỡng -> nên chuyển sang finished
+                                     console.log("Reached end of questions by index.");
+                                     if(currentPlayerId === 'player1' && newStatus !== 'finished') {
+                                         gameRef.update({ status: 'finished' });
+                                     }
+                                 }
+                             }
+                         }
+                         break;
+
+                     case 'finished':
+                         if (endScreen.style.display !== 'flex') {
+                             console.log("Status 'finished'. Showing end screen.");
+                             clearTimeout(nextQuestionTimeout);
+                             showEndScreen();
+                         }
+                         break;
+
+                     case 'waiting':
+                         if (waitingScreen.style.display !== 'flex') {
+                             console.log("Status 'waiting'. Returning to waiting screen.");
+                             clearTimeout(nextQuestionTimeout); // Dừng game nếu đang chạy
+                             resetLocalGame(true); // Reset state cục bộ, giữ listener
+                             showScreen('waiting-screen');
+                             myWaitingName.textContent = myName; // Hiển thị lại tên mình
+                             // Cập nhật trạng thái đối thủ (listener sẽ làm nhưng gọi lại cho chắc)
+                              opponentWaitingName.textContent = opponentConnected ? opponentName : "Chưa kết nối";
+                              if(opponentConnected) opponentWaitingName.classList.add('connected');
+                              else opponentWaitingName.classList.remove('connected');
+                         }
+                          // Kích hoạt lại nút chơi lại nếu đang ở màn end
+                          if (endScreen.style.display === 'flex') {
+                              playAgainButton.textContent = "Chơi Lại?";
+                              playAgainButton.disabled = false;
+                          }
+                         break;
+
+                     default:
+                         console.warn("Unknown game status:", newStatus);
+                 }
+
+             }, error => {
+                 console.error("Lỗi lắng nghe trạng thái game:", error);
+                 alert("Mất kết nối với server game. Vui lòng kiểm tra mạng và tải lại trang.");
+                 resetLocalGame(false);
+             });
+         }
+
+
+        // --- LOGIC GAME CHÍNH ---
+        function checkIfBothPlayersReady() {
+            // Chỉ Player 1 mới có quyền bắt đầu game
+            if (currentPlayerId !== 'player1') return;
+
+            // Kiểm tra xem cả hai đã kết nối chưa (dựa vào biến cục bộ được cập nhật bởi listener)
+            if (opponentConnected) {
+                // Kiểm tra trạng thái hiện tại trên Firebase trước khi bắt đầu
+                 gameRef.child('status').once('value', statusSnapshot => {
+                     if (statusSnapshot.val() === 'waiting') {
+                         console.log("Player 1 detected both players ready, initiating game start.");
+                         questionsOrder = shuffleArray([...Array(countries.length).keys()]);
+                         gameRef.update({
+                             status: 'playing',
+                             currentQuestionIndex: 0,
+                             questionsOrder: questionsOrder,
+                             // Reset điểm khi bắt đầu game mới
+                             [`players/player1/score`]: 0,
+                             [`players/player2/score`]: 0
+                         })
+                         .then(() => console.log("Game state updated to 'playing' by Player 1."))
+                         .catch(err => console.error("Player 1 failed to start game:", err));
+                     } else {
+                          console.log("Game status is not 'waiting', P1 won't start again.");
+                     }
+                 });
+            } else {
+                 console.log("Player 1 waiting for opponent to connect.");
+            }
+        }
+
+        function startGameLocally() {
+             console.log(`startGameLocally() called for ${currentPlayerId}`);
+             updateNameDisplay(); // Cập nhật tên, điểm
+             showScreen('game-screen');
+             if (questionsOrder && questionsOrder.length > 0 && currentQuestionIndex < TOTAL_QUESTIONS) {
+                 displayQuestion();
+             } else {
+                 console.error("Cannot start game: Invalid question order or index.", questionsOrder, currentQuestionIndex);
+                 feedbackDisplay.textContent = "Lỗi tải câu hỏi!";
+                 // Có thể quay về màn hình chờ hoặc báo lỗi rõ hơn
+                  if (currentPlayerId === 'player1') {
+                      resetGameOnFirebase(); // Nếu P1 gặp lỗi, reset game
+                  }
+             }
+        }
+
+        function displayQuestion() {
+            // ... (Hàm displayQuestion giữ nguyên logic tạo câu hỏi và lựa chọn) ...
+             if (currentQuestionIndex >= TOTAL_QUESTIONS || !questionsOrder || questionsOrder.length <= currentQuestionIndex) {
+                 console.log("Attempting to display question index out of bounds or invalid order.");
+                 if (currentPlayerId === 'player1') {
+                      gameRef.child('status').once('value', statusSnap => {
+                          if (statusSnap.val() !== 'finished') {
+                              gameRef.update({ status: 'finished' });
+                          }
+                      });
+                 }
+                 return;
+             }
+             feedbackDisplay.textContent = '';
+             enableOptions();
+             questionCounter.textContent = `Câu ${currentQuestionIndex + 1}/${TOTAL_QUESTIONS}`;
+             const actualCountryIndex = questionsOrder[currentQuestionIndex];
+             if (actualCountryIndex === undefined || actualCountryIndex >= countries.length) {
+                  console.error(`Invalid country index ${actualCountryIndex} at question ${currentQuestionIndex}`);
+                  if(currentPlayerId === 'player1') goToNextQuestion();
+                  return;
+             }
+             const correctCountry = countries[actualCountryIndex];
+             flagImage.src = `https://flagcdn.com/w160/${correctCountry.code.toLowerCase()}.png`;
+             flagImage.alt = `Quốc kỳ ${correctCountry.name}`;
+             flagImage.onerror = () => {
+                 console.error("Lỗi tải ảnh cờ:", correctCountry.code);
+                 flagImage.alt = `Lỗi tải cờ ${correctCountry.name}`;
+                 flagImage.src = "";
+             };
+             let options = [correctCountry.name];
+             let incorrectCountries = countries.filter((c, index) => index !== actualCountryIndex);
+             incorrectCountries = shuffleArray(incorrectCountries);
+             for (let i = 0; i < 3 && i < incorrectCountries.length; i++) {
+                 options.push(incorrectCountries[i].name);
+             }
+              while(options.length < 4 && countries.length >= 4) {
+                 const backupOption = countries.find(c => !options.includes(c.name) && c.name !== correctCountry.name); // Đảm bảo ko trùng cả đáp án đúng
+                 if(backupOption) options.push(backupOption.name);
+                 else break;
+              }
+             options = shuffleArray(options);
+             const optionButtons = optionsContainer.querySelectorAll('.option');
+             optionButtons.forEach((button, index) => {
+                 if (options[index]) {
+                     button.textContent = options[index];
+                     button.dataset.countryName = options[index];
+                     button.style.display = 'block';
+                 } else {
+                     button.style.display = 'none';
+                 }
+             });
+        }
+
+
+        function handleAnswer(event) {
+            // ... (Hàm handleAnswer giữ nguyên logic kiểm tra đúng sai, cập nhật điểm) ...
+             disableOptions();
+             const selectedButton = event.target;
+             const selectedCountryName = selectedButton.dataset.countryName;
+             // Luôn lấy index mới nhất từ biến toàn cục phòng trường hợp có cập nhật ngầm
+             const currentCorrectIndex = questionsOrder[currentQuestionIndex];
+             if (currentCorrectIndex === undefined) {
+                  console.error("Invalid question index in handleAnswer");
+                  return; // Không xử lý nếu index lỗi
+             }
+             const correctCountryName = countries[currentCorrectIndex].name;
+
+             let isCorrect = selectedCountryName === correctCountryName;
+             let scoreIncrement = 0;
+
+             if (isCorrect) {
+                 feedbackDisplay.textContent = `Chính xác! +${POINTS_PER_CORRECT_ANSWER} điểm`;
+                 feedbackDisplay.style.color = '#28a745';
+                 selectedButton.classList.add('correct');
+                 scoreIncrement = POINTS_PER_CORRECT_ANSWER;
+                 // Cập nhật điểm lên Firebase
+                  playerRef.child('score').transaction(currentScore => {
+                      // Chỉ tăng điểm nếu game đang thực sự diễn ra
+                       return gameScreen.style.display === 'flex' ? (currentScore || 0) + scoreIncrement : currentScore;
+                  }).catch(error => console.error("Error updating score:", error));
+                  // Cập nhật điểm cục bộ NGAY LẬP TỨC
+                  if(currentPlayerId === 'player1') player1Score += scoreIncrement;
+                  else player2Score += scoreIncrement;
+                  updateScoreDisplay(); // Chỉ cập nhật điểm, không cần tên
+
+             } else {
+                 feedbackDisplay.textContent = `Sai rồi! Đáp án đúng: ${correctCountryName}`;
+                  feedbackDisplay.style.color = '#dc3545';
+                 selectedButton.classList.add('incorrect');
+                 optionsContainer.querySelectorAll('.option').forEach(btn => {
+                     if (btn.dataset.countryName === correctCountryName) {
+                         btn.classList.add('reveal-correct');
+                     }
+                 });
+             }
+
+             clearTimeout(nextQuestionTimeout);
+             nextQuestionTimeout = setTimeout(() => {
+                  if (currentPlayerId === 'player1') {
+                     goToNextQuestion();
+                  }
+             }, DELAY_NEXT_QUESTION);
+        }
+
+
+        function goToNextQuestion() {
+            // ... (Hàm goToNextQuestion giữ nguyên) ...
+             const nextIndex = currentQuestionIndex + 1;
+             if (nextIndex < TOTAL_QUESTIONS) {
+                  console.log("Player 1 advancing to question:", nextIndex);
+                  gameRef.update({ currentQuestionIndex: nextIndex })
+                      .catch(err => console.error("Error advancing question:", err));
+             } else {
+                 console.log("Player 1 ending game.");
+                  gameRef.update({ status: 'finished' })
+                      .catch(err => console.error("Error finishing game:", err));
+             }
+        }
+
+        // --- KẾT THÚC GAME ---
+        function showEndScreen() {
+            // ... (Hàm showEndScreen giữ nguyên, dùng tên mặc định) ...
+             clearTimeout(nextQuestionTimeout);
+             showScreen('end-screen');
+             const p1FinalScore = player1Score;
+             const p2FinalScore = player2Score;
+             const p1FinalName = PLAYER1_DEFAULT_NAME;
+             const p2FinalName = PLAYER2_DEFAULT_NAME;
+
+             let winnerName = "";
+             let loserName = "";
+             let resultText = "";
+             let winnerMsg = "";
+             let loserMsg = "";
+             let isTie = false;
+
+             if (p1FinalScore > p2FinalScore) {
+                 winnerName = p1FinalName; loserName = p2FinalName;
+                 resultText = `${winnerName} thắng ${p1FinalScore} - ${p2FinalScore}!`;
+                 winnerMsg = `🎉 ${winnerName} quá xuất sắc! Vỗ tay! 👏`;
+                 loserMsg = `😅 ${loserName} ơi, lần sau gỡ lại nhé!`;
+             } else if (p2FinalScore > p1FinalScore) {
+                 winnerName = p2FinalName; loserName = p1FinalName;
+                 resultText = `${winnerName} thắng ${p2FinalScore} - ${p1FinalScore}!`;
+                 winnerMsg = `🏆 ${winnerName} chiến thắng thuyết phục! Hoan hô!`;
+                 loserMsg = `😜 ${loserName} à, thua nhưng vẫn vui phải không?`;
+             } else {
+                  isTie = true;
+                 resultText = `Hòa ${p1FinalScore} - ${p1FinalScore}! Bất phân thắng bại!`;
+                 winnerMsg = `🤝 Cả hai người chơi đều tuyệt vời!`;
+                 loserMsg = `Một trận đấu kịch tính! Hẹn gặp lại!`;
+             }
+
+             finalResultDisplay.textContent = resultText;
+             winnerMessageDisplay.textContent = winnerMsg;
+             loserMessageDisplay.textContent = loserMsg;
+             winnerMessageDisplay.style.color = isTie ? '#007bff' : '#28a745';
+             playAgainButton.textContent = "Chơi Lại?";
+             playAgainButton.disabled = false;
+        }
+
+        // --- CHƠI LẠI ---
+        playAgainButton.addEventListener('click', () => {
+            playAgainButton.disabled = true; // Vô hiệu hóa ngay
+            playAgainButton.textContent = "Đang chờ...";
+            if (currentPlayerId === 'player1' && gameRef) {
+                 console.log("Player 1 initiating play again...");
+                 resetGameOnFirebase();
+            } else if (currentPlayerId === 'player2'){
+                 console.log("Player 2 waiting for Player 1 to reset game...");
+                 // Player 2 chỉ chờ tín hiệu 'waiting' từ Firebase
+            }
+        });
+
+        function resetGameOnFirebase() {
+             if (!gameRef || currentPlayerId !== 'player1') return;
+             console.log("Player 1 resetting Firebase game state to 'waiting'");
+             gameRef.update({
+                 status: 'waiting',
+                 currentQuestionIndex: 0,
+                 questionsOrder: null,
+                 [`players/player1/score`]: 0,
+                 [`players/player2/score`]: 0
+                 // Không cần reset connected hoặc name
+             })
+             .catch(err => {
+                  console.error("Error resetting game:", err);
+                  // Nếu lỗi, kích hoạt lại nút chơi lại trên client P1
+                  playAgainButton.disabled = false;
+                  playAgainButton.textContent = "Chơi Lại?";
+             });
+             // Game listener sẽ tự động chuyển cả 2 client về màn hình chờ
+        }
+
+
+        // --- RESET GAME CỤC BỘ ---
+        function resetLocalGame(keepListeners = false) {
+             console.log(`Resetting local game state. Keep listeners: ${keepListeners}`);
+             clearTimeout(nextQuestionTimeout);
+             currentQuestionIndex = 0;
+             player1Score = 0;
+             player2Score = 0;
+             questionsOrder = [];
+             feedbackDisplay.textContent = '';
+             feedbackDisplay.style.color = '';
+             playAgainButton.textContent = "Chơi Lại?";
+             playAgainButton.disabled = false;
+             updateScoreDisplay(); // Reset điểm trên UI
+
+             if (!keepListeners) {
+                  console.log("Removing listeners and disconnecting.");
+                  if (gameListener && gameRef) gameRef.off('value', gameListener);
+                  if (opponentListener && opponentRef) opponentRef.off('value', opponentListener);
+                  if (playerRef) {
+                      playerRef.child('connected').remove(); // Cố gắng xóa trạng thái connected
+                  }
+                  gameRef = null; playerRef = null; opponentRef = null;
+                  currentPlayerId = null; opponentPlayerId = null;
+                  myName = ""; opponentName = "";
+                  gameListener = null; opponentListener = null;
+                  opponentConnected = false;
+                  showScreen('password-screen');
+             }
+             // Nếu keepListeners=true, gameListener sẽ xử lý chuyển về màn hình chờ
+        }
+
+        // --- XỬ LÝ KHI ĐÓNG TAB/TRÌNH DUYỆT ---
+        // Đã xử lý bằng onDisconnect trong initializeGameConnection
+
+        // --- KHỞI ĐẦU ---
+        showScreen('password-screen');
+        console.log("Flag Quiz Game (No Name Input) Initialized.");
+
+    </script>
+
+</body>
+</html>
